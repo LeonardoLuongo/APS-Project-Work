@@ -30,3 +30,13 @@ class StudentWallet:
         
         self.credentials = {} # Un dizionario per conservare le credenziali per ID
         print(f"Wallet creato per lo studente '{self.owner_id}' con pseudonym '{self.pseudonym[:10]}...'.")
+    
+    def receive_credential(self, credential):
+        """
+        Riceve e salva una nuova credenziale nel wallet.
+        In un sistema reale, qui avverrebbe anche una verifica della firma.
+        """
+        # Per ora, la aggiungiamo semplicemente al nostro "database" di credenziali.
+        self.credentials[credential.credential_id] = credential
+        print(f"Wallet di '{self.owner_id}': ricevuta e salvata la credenziale {credential.credential_id}.")
+
