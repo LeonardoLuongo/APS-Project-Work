@@ -6,6 +6,8 @@
 # Ricevere credenziali e verificarne l’autenticità e l’integrità.
 ###################################################################################################################
 
+from utils.crypto_utils import verify_signature
+from utils.credential import AcademicCredential
 
 class VerifyingUniversity:
     def __init__(self, university_id):
@@ -20,3 +22,57 @@ class VerifyingUniversity:
         """Aggiunge un Ente di Accreditamento all'elenco di quelli fidati."""
         self.trusted_authorities[authority.name] = authority.public_key
         print(f"'{self.id}' ora si fida di '{authority.name}'.")
+
+    def verify_presentation(self, presentation):
+        """
+        Verifica una presentazione selettiva ricevuta da uno studente.
+        Esegue 3 controlli: fiducia nell'emittente, firma della credenziale, e prova di inclusione.
+        """
+        print(f"\n'{self.id}' sta verificando una presentazione...")
+
+        try:
+            # --- CHECK 1: Fiducia nell'Emittente (Concetto dal Lab 3: CA) ---
+            issuer_cert = presentation['issuer_certificate']
+            authority_name = issuer_cert['authority_name']
+            
+            if authority_name not in self.trusted_authorities:
+                print(f"RISULTATO: FALLITO. L'ente di accreditamento '{authority_name}' non è fidato.")
+                return False
+            
+            authority_public_key = self.trusted_authorities[authority_name]
+            
+            # Verifichiamo la firma dell'EA sul certificato dell'università emittente
+            if not verify_signature(authority_public_key, issuer_cert['signature'], issuer_cert['data']):
+                print("RISULTATO: FALLITO. Il certificato dell'università emittente non è valido.")
+                return False
+            print("CHECK 1/3: Fiducia nell'emittente... OK.")
+
+            # --- CHECK 2: Firma della Credenziale (Concetto dal Lab 2: Firme) ---
+            # Dobbiamo ottenere la chiave pubblica dell'emittente dal suo certificato
+            from cryptography.hazmat.primitives import serialization
+            issuer_public_key_pem = issuer_cert['data']['public_key_pem'].encode('utf-8')
+            issuer_public_key = serialization.load_pem_public_key(issuer_public_key_pem)
+
+            if not verify_signature(issuer_public_key, presentation['credential_signature'], presentation['original_credential_public_part']):
+                print("RISULTATO: FALLITO. La firma sulla credenziale non è valida.")
+                return False
+            print("CHECK 2/3: Firma della credenziale... OK.")
+
+            # --- CHECK 3: Prova di Inclusione (Concetto dal Lab 5: Merkle Tree) ---
+            merkle_root = presentation['original_credential_public_part']['merkle_root']
+            presented_course = presentation['presented_course']
+            proof = presentation['merkle_proof'] # La prova è già un dizionario/lista JSON
+            
+            # Usiamo il nostro metodo statico di verifica
+            if not AcademicCredential.verify_proof(presented_course, proof, merkle_root):
+                print("RISULTATO: FALLITO. La Merkle proof non è valida.")
+                return False
+            print("CHECK 3/3: Prova di inclusione del corso... OK.")
+
+
+            print("\nRISULTATO: SUCCESSO! La presentazione è valida e verificata.")
+            return True
+
+        except Exception as e:
+            print(f"RISULTATO: FALLITO. Errore durante la verifica: {e}")
+            return False

@@ -40,3 +40,39 @@ class StudentWallet:
         self.credentials[credential.credential_id] = credential
         print(f"Wallet di '{self.owner_id}': ricevuta e salvata la credenziale {credential.credential_id}.")
 
+    def create_selective_presentation(self, credential_id, course_id_to_present):
+        """
+        Crea una "Presentazione Verificabile" per un corso specifico.
+        """
+        
+        if credential_id not in self.credentials:
+            print("Errore: Credenziale non trovata nel wallet.")
+            return None
+
+        credential = self.credentials[credential_id]
+
+        presented_course_data = next((c for c in credential.json_courses if c.get("id") == course_id_to_present), None)
+    
+        if presented_course_data is None:
+            print(f"Errore: Il corso '{course_id_to_present}' non è stato trovato.")
+            return None
+        
+        # Genera la prova di inclusione per il corso richiesto
+        proof = credential.generate_proof_for_course(presented_course_data)
+
+        if proof is None:
+            print(f"Errore: Il corso {presented_course_data['nome']} non è stato trovato nella credenziale.")
+            return None
+            
+        # La presentazione contiene tutto ciò che serve al verificatore
+        presentation = {
+            "type": "VerifiablePresentation",
+            "presented_course": presented_course_data,
+            "merkle_proof": proof,
+            "original_credential_public_part": credential.to_verifiable_dict(),
+            "issuer_certificate": credential.issuer_info['certificate'],
+            "credential_signature": credential.signature
+        }
+        
+        print(f"\nWallet di '{self.owner_id}': creata presentazione per il corso '{presented_course_data['nome']}'.")
+        return presentation
