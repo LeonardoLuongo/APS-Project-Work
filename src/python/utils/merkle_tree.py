@@ -1,101 +1,74 @@
-
-import hashlib
-import json
-
-def _hash_function(data):
-    """Funzione di hashing interna, consistente in tutto il progetto."""
-    if isinstance(data, dict) or isinstance(data, list):
-        # Forma canonica: chiavi ordinate, nessun spazio.
-        data_string = json.dumps(data, sort_keys=True, separators=(',', ':')).encode('utf-8')
-    elif not isinstance(data, bytes):
-        data_string = str(data).encode('utf-8')
-    else:
-        data_string = data
-    return hashlib.sha256(data_string).hexdigest()
+# src/python/utils/merkle_tree.py
+"""
+Implementazione di un Merkle Tree per generare e verificare prove di inclusione.
+"""
+from typing import List, Dict, Any, Optional
+from .crypto_utils import hash_data
 
 class MerkleTree:
-    def __init__(self, data_list):
-        """
-        Costruisce un Merkle Tree da una lista di dati.
-        Args:
-            data_list (list): Lista di dati originali (es. i dizionari dei corsi).
-        """
+    def __init__(self, data_list: List[Dict[str, Any]]):
+        """Costruisce un Merkle Tree da una lista di dati (es. dizionari dei corsi)."""
         self.data_list = data_list
-        self.leaves = [_hash_function(json.dumps(d, sort_keys=True)) for d in self.data_list]
+        self.leaves = [hash_data(d) for d in self.data_list]
         self.tree = self._build_tree()
-        self.root = self.tree[0] if self.tree else None
+        self.root = self.tree[0][0] if self.tree and self.tree[0] else None
 
-    def _build_tree(self):
-        """Costruisce l'albero livello per livello."""
+    def _build_tree(self) -> List[List[str]]:
+        """Costruisce l'albero livello per livello, dal basso verso l'alto."""
         if not self.leaves:
             return []
         
-        level = self.leaves[:]
-        tree = [level]
+        levels = [self.leaves[:]]
+        current_level = self.leaves[:]
         
-        while len(level) > 1:
-            if len(level) % 2 != 0:
-                level.append(level[-1]) # Duplica l'ultimo se dispari
+        while len(current_level) > 1:
+            if len(current_level) % 2 != 0:
+                current_level.append(current_level[-1])
             
             next_level = []
-            for i in range(0, len(level), 2):
-                combined_hash = _hash_function(level[i] + level[i+1])
+            for i in range(0, len(current_level), 2):
+                combined_hash = hash_data(current_level[i] + current_level[i+1])
                 next_level.append(combined_hash)
             
-            level = next_level
-            tree.insert(0, level) # Inserisce i livelli più alti all'inizio della lista
+            levels.append(next_level)
+            current_level = next_level
             
-        return tree[0] # Restituisce solo il livello della radice
+        return list(reversed(levels))
 
-    def get_proof(self, data_to_prove):
-        """
-        Genera una Merkle Proof per un dato specifico.
-        La proof è una lista di tuple (hash, posizione).
-        """
+    def get_proof(self, data_to_prove: Dict[str, Any]) -> Optional[List[Dict[str, str]]]:
+        """Genera una Merkle Proof per un dato specifico."""
         try:
-            leaf_hash = _hash_function(json.dumps(data_to_prove, sort_keys=True))
+            leaf_hash = hash_data(data_to_prove)
             index = self.leaves.index(leaf_hash)
         except ValueError:
-            return None # Il dato non è nell'albero
+            return None
 
         proof = []
-        current_level_nodes = self.leaves[:]
-        
-        while len(current_level_nodes) > 1:
-            if len(current_level_nodes) % 2 != 0:
-                current_level_nodes.append(current_level_nodes[-1])
-
+        for i in range(len(self.tree) - 1, 0, -1):
+            level = self.tree[i]
             is_right_node = index % 2
             sibling_index = index - 1 if is_right_node else index + 1
             
-            if sibling_index < len(current_level_nodes):
+            if sibling_index < len(level):
                 proof.append({
-                    'hash': current_level_nodes[sibling_index],
+                    'hash': level[sibling_index],
                     'position': 'left' if is_right_node else 'right'
                 })
-
-            # Passa al livello successivo
-            next_level = []
-            for i in range(0, len(current_level_nodes), 2):
-                 next_level.append(_hash_function(current_level_nodes[i] + current_level_nodes[i+1]))
-            
-            current_level_nodes = next_level
-            index = index // 2
+            index //= 2
             
         return proof
 
     @staticmethod
-    def verify_proof(data_to_verify, proof, root):
-        """
-        Verifica una Merkle Proof.
-        """
-        computed_hash = _hash_function(json.dumps(data_to_verify, sort_keys=True))
+    def verify_proof(data_to_verify: Dict[str, Any], proof: List[Dict[str, str]], root: str) -> bool:
+        """Verifica una Merkle Proof."""
+        computed_hash = hash_data(data_to_verify)
         
         for p in proof:
+            sibling_hash = p['hash']
             if p['position'] == 'left':
-                computed_hash = _hash_function(p['hash'] + computed_hash)
+                computed_hash = hash_data(sibling_hash + computed_hash)
             elif p['position'] == 'right':
-                computed_hash = _hash_function(computed_hash + p['hash'])
+                computed_hash = hash_data(computed_hash + sibling_hash)
             else:
                 return False
 
