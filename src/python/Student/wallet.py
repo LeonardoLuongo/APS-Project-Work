@@ -67,10 +67,10 @@ class StudentWallet:
         # La presentazione contiene tutto ciò che serve al verificatore
         presentation = {
             "type": "VerifiablePresentation",
-            "presented_course": presented_course_data,
-            "merkle_proof": proof,
-            "original_credential_public_part": credential.to_verifiable_dict(),
-            "issuer_certificate": credential.issuer_info['certificate'],
+            "presented_course": presented_course_data.copy(),
+            "merkle_proof": proof.copy(),  # Copia per evitare modifiche accidentali
+            "original_credential_public_part": credential.to_verifiable_dict().copy(),
+            "issuer_certificate": credential.issuer_info['certificate'].copy(),
             "credential_signature": credential.signature
         }
         

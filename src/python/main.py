@@ -5,6 +5,7 @@ from AccreditationAuthority.accreditation_authority import AccreditationAuthorit
 from IssuingUniversity.issuing_university import IssuingUniversity
 from Student.student import Student
 from VerifyingUniversity.verifying_university import VerifyingUniversity
+from Revocation.revocation import RevocationRegistry
 
 def main():
     print("--- Inizio Simulazione: Fase di Setup ---")
@@ -24,6 +25,12 @@ def main():
 
     # 3. Creare lo Studente
     studente_francesco = Student(name="Francesco Monda")
+
+    # 4. Inizializza il registro di revoca
+    revocation_registry = RevocationRegistry()
+
+    # Pulisci il registro all'inizio di ogni esecuzione per avere test puliti
+    revocation_registry.clear_registry_for_testing()
     
     print("\n--- Fine Fase di Setup ---")
     print("Attori creati e pronti per interagire.")
@@ -61,7 +68,7 @@ def main():
     if presentation:
         # 2. Francesco "invia" la presentazione all'Università di Salerno
         # 3. Salerno esegue la verifica completa
-        is_valid = uni_salerno.verify_presentation(presentation)
+        is_valid = uni_salerno.verify_presentation(presentation, revocation_registry)
 
         if is_valid:
             print(f"\nL'università di Salerno ha accettato la prova per il corso '{presentation['presented_course']['nome']}'.")
@@ -87,12 +94,40 @@ def main():
 
         # 3. Lo studente invia la presentazione MANOMESSA a Salerno.
         print("\nSalerno riceve e verifica la presentazione manomessa...")
-        is_valid_manomessa = uni_salerno.verify_presentation(presentazione_manomessa)
+        is_valid_manomessa = uni_salerno.verify_presentation(presentazione_manomessa, revocation_registry)
 
         if not is_valid_manomessa:
             print("\nRISULTATO SCENARIO FRODE: SUCCESSO. La frode è stata rilevata come previsto!")
         else:
             print("\nRISULTATO SCENARIO FRODE: FALLITO. La frode non è stata rilevata!")
+    
+    # --- Scenario di Revoca ---
+    print("\n--- Simulazione di Revoca di una Credenziale ---")
+
+    # 1. Lo studente presenta la sua credenziale VALIDA (ID 2) e la verifica ha successo.
+    print("\nStep 1: Presentazione valida prima della revoca...")
+    id_esame = 2
+    presentazione_pre_revoca = studente_francesco.wallet.create_selective_presentation(cred_id, id_esame)
+    if presentazione_pre_revoca:
+        # Passiamo il registro al metodo di verifica
+        is_valid = uni_salerno.verify_presentation(presentazione_pre_revoca, revocation_registry)
+        print(f"Stato verifica pre-revoca: {'Successo' if is_valid else 'Fallita'}")
+
+    # 2. L'Università di Rennes decide di REVOCARE la credenziale di Francesco.
+    print("\nStep 2: L'università emittente revoca la credenziale...")
+    uni_rennes.revoke_credential(revocation_registry, cred_id)
+
+    # 3. Lo studente (magari ignaro) prova a ripresentare la stessa credenziale.
+    print("\nStep 3: Tentativo di ripresentare la credenziale dopo la revoca...")
+    presentazione_post_revoca = studente_francesco.wallet.create_selective_presentation(cred_id, id_esame)
+    if presentazione_post_revoca:
+        # La verifica ora dovrebbe fallire al CHECK 4.
+        is_valid_post = uni_salerno.verify_presentation(presentazione_post_revoca, revocation_registry)
+        
+        if not is_valid_post:
+            print("\nRISULTATO SCENARIO REVOCA: SUCCESSO. La revoca è stata rilevata correttamente!")
+        else:
+            print("\nRISULTATO SCENARIO REVOCA: FALLITO. La revoca non è stata rilevata.")
 
 
 if __name__ == "__main__":

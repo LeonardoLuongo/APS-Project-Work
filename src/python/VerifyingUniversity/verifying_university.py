@@ -23,7 +23,7 @@ class VerifyingUniversity:
         self.trusted_authorities[authority.name] = authority.public_key
         print(f"'{self.id}' ora si fida di '{authority.name}'.")
 
-    def verify_presentation(self, presentation):
+    def verify_presentation(self, presentation, registry):
         """
         Verifica una presentazione selettiva ricevuta da uno studente.
         Esegue 3 controlli: fiducia nell'emittente, firma della credenziale, e prova di inclusione.
@@ -45,7 +45,7 @@ class VerifyingUniversity:
             if not verify_signature(authority_public_key, issuer_cert['signature'], issuer_cert['data']):
                 print("RISULTATO: FALLITO. Il certificato dell'università emittente non è valido.")
                 return False
-            print("CHECK 1/3: Fiducia nell'emittente... OK.")
+            print("CHECK 1/4: Fiducia nell'emittente... OK.")
 
             # --- CHECK 2: Firma della Credenziale (Concetto dal Lab 2: Firme) ---
             # Dobbiamo ottenere la chiave pubblica dell'emittente dal suo certificato
@@ -56,7 +56,7 @@ class VerifyingUniversity:
             if not verify_signature(issuer_public_key, presentation['credential_signature'], presentation['original_credential_public_part']):
                 print("RISULTATO: FALLITO. La firma sulla credenziale non è valida.")
                 return False
-            print("CHECK 2/3: Firma della credenziale... OK.")
+            print("CHECK 2/4: Firma della credenziale... OK.")
 
             # --- CHECK 3: Prova di Inclusione (Concetto dal Lab 5: Merkle Tree) ---
             merkle_root = presentation['original_credential_public_part']['merkle_root']
@@ -67,8 +67,17 @@ class VerifyingUniversity:
             if not AcademicCredential.verify_proof(presented_course, proof, merkle_root):
                 print("RISULTATO: FALLITO. La Merkle proof non è valida.")
                 return False
-            print("CHECK 3/3: Prova di inclusione del corso... OK.")
+            print("CHECK 3/4: Prova di inclusione del corso... OK.")
 
+            print("\nRISULTATO: SUCCESSO! La presentazione è valida e verificata.")
+
+            # --- CHECK 4: Controllo Stato di Revoca ---
+            credential_id = presentation['original_credential_public_part']['credential_id']
+            if registry.is_revoked(credential_id):
+                print("CHECK 4/4: Stato di revoca...\nRISULTATO: FALLITO. La credenziale è stata revocata.")
+                return False
+            
+            print("CHECK 4/4: Stato di revoca... OK (non revocata).")
 
             print("\nRISULTATO: SUCCESSO! La presentazione è valida e verificata.")
             return True

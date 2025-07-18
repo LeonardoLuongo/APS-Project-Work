@@ -50,5 +50,14 @@ class IssuingUniversity:
         
         # 3. "Consegna" la credenziale allo studente
         student_wallet.receive_credential(credential)
+    
+    def revoke_credential(self, registry, credential_id):
+        """
+        Registra la revoca di una credenziale.
+        In un sistema reale, solo l'emittente originale avrebbe il diritto di farlo.
+        """
+        print(f"\nL'università '{self.id}' sta revocando la credenziale ID: {credential_id}")
+        registry.add_revocation(credential_id)
+
 
 
