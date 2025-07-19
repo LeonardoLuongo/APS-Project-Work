@@ -1,60 +1,64 @@
-# src/python/utils/merkle_tree.py
-"""
-Implementazione di un Merkle Tree per generare e verificare prove di inclusione.
-"""
+import hashlib
+import json
 from typing import List, Dict, Any, Optional
-from .crypto_utils import hash_data
+from utils.crypto_utils import hash_data
+
 
 class MerkleTree:
     def __init__(self, data_list: List[Dict[str, Any]]):
-        """Costruisce un Merkle Tree da una lista di dati (es. dizionari dei corsi)."""
         self.data_list = data_list
         self.leaves = [hash_data(d) for d in self.data_list]
-        self.tree = self._build_tree()
-        self.root = self.tree[0][0] if self.tree and self.tree[0] else None
+        self.root = self._calculate_root(self.leaves)
 
-    def _build_tree(self) -> List[List[str]]:
-        """Costruisce l'albero livello per livello, dal basso verso l'alto."""
-        if not self.leaves:
-            return []
+    def _calculate_root(self, hashes: List[str]) -> Optional[str]:
+        """Metodo ricorsivo per calcolare la Merkle Root."""
+        if not hashes:
+            return None
+        if len(hashes) == 1:
+            return hashes[0]
+
+        next_level = []
+        # Applica il padding se la lista è dispari
+        if len(hashes) % 2 == 1:
+            hashes.append(hashes[-1])
+
+        for i in range(0, len(hashes), 2):
+            combined = hashes[i] + hashes[i+1]
+            next_level.append(hash_data(combined))
         
-        levels = [self.leaves[:]]
-        current_level = self.leaves[:]
-        
-        while len(current_level) > 1:
-            if len(current_level) % 2 != 0:
-                current_level.append(current_level[-1])
-            
-            next_level = []
-            for i in range(0, len(current_level), 2):
-                combined_hash = hash_data(current_level[i] + current_level[i+1])
-                next_level.append(combined_hash)
-            
-            levels.append(next_level)
-            current_level = next_level
-            
-        return list(reversed(levels))
+        return self._calculate_root(next_level)
 
     def get_proof(self, data_to_prove: Dict[str, Any]) -> Optional[List[Dict[str, str]]]:
         """Genera una Merkle Proof per un dato specifico."""
         try:
-            leaf_hash = hash_data(data_to_prove)
-            index = self.leaves.index(leaf_hash)
+            current_hash = hash_data(data_to_prove)
+            idx = self.leaves.index(current_hash)
         except ValueError:
-            return None
+            return None # Il dato non è nell'albero
 
         proof = []
-        for i in range(len(self.tree) - 1, 0, -1):
-            level = self.tree[i]
-            is_right_node = index % 2
-            sibling_index = index - 1 if is_right_node else index + 1
+        current_level_hashes = self.leaves[:]
+
+        while len(current_level_hashes) > 1:
+            # Applica il padding se il livello attuale è dispari
+            if len(current_level_hashes) % 2 == 1:
+                current_level_hashes.append(current_level_hashes[-1])
+
+            if idx % 2 == 0: # Nodo a sinistra
+                sibling_hash = current_level_hashes[idx + 1]
+                proof.append({'hash': sibling_hash, 'position': 'right'})
+            else: # Nodo a destra
+                sibling_hash = current_level_hashes[idx - 1]
+                proof.append({'hash': sibling_hash, 'position': 'left'})
             
-            if sibling_index < len(level):
-                proof.append({
-                    'hash': level[sibling_index],
-                    'position': 'left' if is_right_node else 'right'
-                })
-            index //= 2
+            # Passa al livello successivo
+            next_level = []
+            for i in range(0, len(current_level_hashes), 2):
+                combined = current_level_hashes[i] + current_level_hashes[i+1]
+                next_level.append(hash_data(combined))
+            
+            current_level_hashes = next_level
+            idx = idx // 2
             
         return proof
 
@@ -73,3 +77,5 @@ class MerkleTree:
                 return False
 
         return computed_hash == root
+
+

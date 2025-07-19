@@ -8,9 +8,15 @@ from Student.student import Student
 from VerifyingUniversity.verifying_university import VerifyingUniversity
 from Revocation.revocation import RevocationRegistry
 from utils.exceptions import ProjectBaseException
+from utils.crypto_utils import generate_rsa_keys, sign_data
+from models import VerifiablePresentation
+from utils.exceptions import SignatureVerificationError
+from models import Certificate
 
 def run_simulation():
     """Esegue la simulazione completa del ciclo di vita di una credenziale."""
+
+    ##########################################################################################################################
     print("--- Inizio Simulazione: Fase di Setup ---")
 
     # 1. Creare l'Ente di Accreditamento (CA)
@@ -41,10 +47,12 @@ def run_simulation():
     uni_rennes.issue_credential(studente_francesco.wallet, corsi_superati)
     cred_id = list(studente_francesco.wallet.credentials.keys())[0]
 
+
+    ##########################################################################################################################
     # --- Scenario di Successo: Presentazione e Verifica ---
     print("\n--- Inizio Simulazione: Fase di Presentazione e Verifica (Scenario di Successo) ---")
     try:
-        id_esame_da_presentare = 1
+        id_esame_da_presentare = 3
         presentation = studente_francesco.wallet.create_selective_presentation(cred_id, id_esame_da_presentare)
         is_valid = uni_salerno.verify_presentation(presentation, revocation_registry)
         if is_valid:
@@ -52,6 +60,7 @@ def run_simulation():
     except ProjectBaseException as e:
         print(f"\nVERIFICA FALLITA: {e}")
 
+    ##########################################################################################################################
     # --- Scenario di Fallimento: Tentativo di Frode ---
     print("\n--- Simulazione di un tentativo di frode (manomissione) ---")
     try:
@@ -73,6 +82,7 @@ def run_simulation():
         print(f"\nVERIFICA FALLITA (correttamente): {e}")
         print("\nRISULTATO SCENARIO FRODE: SUCCESSO. La frode è stata rilevata come previsto!")
 
+    ##########################################################################################################################
     # --- Scenario di Revoca ---
     print("\n--- Simulazione di Revoca di una Credenziale ---")
     
@@ -98,6 +108,65 @@ def run_simulation():
     except ProjectBaseException as e:
         print(f"VERIFICA FALLITA (correttamente): {e}")
         print("\nRISULTATO SCENARIO REVOCA: SUCCESSO. La revoca è stata rilevata correttamente!")
+
+    ##########################################################################################################################
+    print("\n--- Simulazione di un Avversario Esterno (Forgery) ---")
+
+    # Un hacker prova a creare una presentazione da zero senza una credenziale valida.
+    # Inventa i dati e firma con la propria chiave.
+    hacker_private_key, hacker_public_key = generate_rsa_keys()
+    dati_inventati = {
+        "credential_id": "fake-id",
+        "issuer_id": "Université de Rennes", # Finge di essere Rennes
+        "student_pseudonym": "fake-student",
+        "merkle_root": "fake-root",
+        "issue_date": "2024-01-01"
+    }
+    firma_falsa = sign_data(hacker_private_key, dati_inventati)
+
+    presentazione_forgiata = VerifiablePresentation(
+        type="VerifiablePresentation",
+        presented_course={"id": 99, "nome": "Hacking 101", "voto": 30},
+        merkle_proof=[], # Prova inventata
+        original_credential_public_part=dati_inventati,
+        issuer_certificate=copy.deepcopy(uni_rennes.certificate), # Usa il vero certificato di Rennes per sembrare legittimo
+        credential_signature=copy.deepcopy(firma_falsa)
+    )
+
+    print("\nUn hacker presenta una credenziale completamente forgiata...")
+    try:
+        uni_salerno.verify_presentation(presentazione_forgiata, revocation_registry)
+        print("\nRISULTATO SCENARIO FORGERY: SUCCESSO. La firma falsa è stata rilevata al CHECK 2!")
+    except SignatureVerificationError as e:
+        print(f"\nVERIFICA FALLITA (correttamente): {e}")
+        print("\nRISULTATO SCENARIO FORGERY: FALLITO. La frode non è stata rilevata!")
+
+    ##########################################################################################################################
+    print("\n--- Simulazione di una Università Emittente Malevola (Fiducia Revocata) ---")
+
+    # Supponiamo che l'EA scopra che Rennes si comporta male e la "banna".
+    # Nella nostra simulazione, basta che Salerno la rimuova dalle sue fonti fidate.
+    # Per semplicità, modifichiamo temporaneamente il certificato per renderlo invalido.
+    
+    certificato_invalido = Certificate(
+        data=copy.deepcopy(uni_rennes.certificate.data),
+        authority_name=uni_rennes.certificate.authority_name,
+        signature=b'invalid_signature_bytes'  # Invalida la firma dell'EA
+    )
+
+    # Lo studente prova a presentare una credenziale (crittograficamente valida) emessa da Rennes.
+    presentazione_da_ue_non_fidata = studente_francesco.wallet.create_selective_presentation(cred_id, 2)
+
+    # Inseriamo il certificato "revocato" nella presentazione
+    object.__setattr__(presentazione_da_ue_non_fidata, 'issuer_certificate', certificato_invalido)
+
+    print("\nLo studente presenta una credenziale da un'università la cui fiducia è stata revocata...")
+    try:
+        uni_salerno.verify_presentation(presentazione_da_ue_non_fidata, revocation_registry)
+        print("\nRISULTATO SCENARIO UE MALEVOLA: FALLITO. La frode non è stata rilevata!")
+    except SignatureVerificationError as e:
+        print("\nRISULTATO SCENARIO UE MALEVOLA: SUCCESSO. La mancanza di fiducia è stata rilevata al CHECK 1!")
+        
 
 
 if __name__ == "__main__":

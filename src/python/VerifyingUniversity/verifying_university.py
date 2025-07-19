@@ -29,7 +29,7 @@ class VerifyingUniversity:
         Esegue 4 controlli sequenziali. Ritorna True se tutti passano.
         Solleva un'eccezione specifica al primo fallimento.
         """
-        print(f"\n'{self.id}' sta verificando una presentazione...")
+        # print(f"\n'{self.id}' sta verificando una presentazione per lo studente con pseudonym: {presentation['original_credential_public_part']['student_pseudonym']}")
 
         # --- CHECK 1: Fiducia nell'Emittente (Trust in CA) ---
         issuer_cert = presentation.issuer_certificate
@@ -44,11 +44,15 @@ class VerifyingUniversity:
 
         # --- CHECK 2: Firma della Credenziale (Issuer Signature) ---
         issuer_public_key = issuer_cert.get_public_key()
-        verify_signature(
-            issuer_public_key, 
-            presentation.credential_signature, 
-            presentation.original_credential_public_part
-        )
+        try:
+            verify_signature(
+                issuer_public_key, 
+                presentation.credential_signature, 
+                presentation.original_credential_public_part
+            )
+        except SignatureVerificationError as e:
+            raise e
+        
         print("CHECK 2/4: Firma della credenziale... OK.")
 
         # --- CHECK 3: Prova di Inclusione (Merkle Proof) ---
