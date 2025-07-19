@@ -1,6 +1,5 @@
 """
-GUI applicativo per il Project Work – versione con login email/password
----------------------------------------------------------------------
+GUI applicativo per il Project Work 
 
 • Tkinter/Ttk con tre ruoli: Studente, Università Emittente, Università Verificatrice
 • Tutti gli oggetti di dominio sono singleton in SessionManager (rimangono
@@ -8,11 +7,6 @@ GUI applicativo per il Project Work – versione con login email/password
 • Layout: un unico container nel root gestito con `grid`; dentro ogni frame
   si usano solo `pack` *oppure* `grid` per evitare conflitti.
 
-Esecuzione rapida
------------------
-$ python gui_app_fixed.py
-
-Dipendenze: le stesse librerie del progetto + Tkinter (incluso).
 """
 from __future__ import annotations
 
@@ -21,9 +15,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Dict, List, Any
 
-# ---------------------------------------------------------------------------
-# Dominî di progetto (import locali al repo)
-# ---------------------------------------------------------------------------
 from AccreditationAuthority.accreditation_authority import AccreditationAuthority
 from IssuingUniversity.issuing_university import IssuingUniversity
 from VerifyingUniversity.verifying_university import VerifyingUniversity
@@ -33,14 +24,18 @@ from utils.exceptions import ProjectBaseException
 from models import VerifiablePresentation
 
 # ---------------------------------------------------------------------------
-# Credenziali di accesso dimostrative (password in chiaro solo per demo)
-# role ∈ {"student", "issuer", "verifier"}
+# Credenziali di accesso dimostrative {"student", "issuer", "verifier"}
 # ---------------------------------------------------------------------------
 ACCOUNTS: Dict[str, Dict[str, str]] = {
     "student@uni.com": {
         "password": "forzalupi",
         "role": "student",
         "name": "Francesco Monda",
+    },
+    "student2@uni.com": {
+        "password": "forzalupi",
+        "role": "student",
+        "name": "Leonardo Luongo",
     },
     "issuer@uni.com": {
         "password": "forzalupi",
@@ -55,13 +50,15 @@ ACCOUNTS: Dict[str, Dict[str, str]] = {
 }
 
 # ---------------------------------------------------------------------------
-# Catalogo corsi di esempio (identico al main CLI)
+# Catalogo corsi di esempio
 # ---------------------------------------------------------------------------
 COURSE_CATALOGUE: List[Dict[str, Any]] = [
     {"id": 1, "nome": "Algoritmi e Protocolli per la Sicurezza", "voto": 30, "cfu": 9, "data": "2024-06-18"},
     {"id": 2, "nome": "Sistemi Distribuiti", "voto": 28, "cfu": 6, "data": "2024-05-20"},
     {"id": 3, "nome": "Letteratura Francese", "voto": 25, "cfu": 6, "data": "2024-06-10"},
 ]
+
+
 
 # ---------------------------------------------------------------------------
 # Session manager – mantiene gli oggetti di dominio per tutta la GUI
@@ -70,7 +67,7 @@ class SessionManager:
     def __init__(self):
         print("[Session] Setup domini…")
         # Autorità di accreditamento
-        self.accreditation_authority = AccreditationAuthority("EU‑Accreditation‑Body")
+        self.accreditation_authority = AccreditationAuthority("EU-Accreditation-Body")
 
         # Università emittente accreditata
         self.issuing_uni = IssuingUniversity(
@@ -83,7 +80,12 @@ class SessionManager:
         self.verifying_uni.add_trusted_authority(self.accreditation_authority)
 
         # Studente e wallet
-        self.student = Student("Francesco Monda")
+        self.students: Dict[str, Student] = {
+            e: Student(info["name"])
+            for e, info in ACCOUNTS.items() if info["role"] == "student"
+        }
+
+        self.active_student: Student | None = None
 
         # Registro di revoca
         self.revocation_registry = RevocationRegistry()
@@ -92,6 +94,9 @@ class SessionManager:
 
         # Buffer di presentazioni create (visibile alla UV)
         self.presentations: List[VerifiablePresentation] = []
+        
+    def get_student(self, email: str) -> Student | None:
+        return self.students.get(email)
 
 # ---------------------------------------------------------------------------
 # Frame base con pulsante Logout e hook on_show
@@ -128,7 +133,7 @@ class LoginFrame(ttk.Frame):
 
         self.email_var, self.pass_var = tk.StringVar(), tk.StringVar()
 
-        #  ⬇  tieni i riferimenti agli Entry
+        #tieni i riferimenti agli Entry
         self.email_entry = ttk.Entry(self, textvariable=self.email_var)
         self.email_entry.grid(row=1, column=1, sticky="we", pady=4)
 
@@ -145,10 +150,8 @@ class LoginFrame(ttk.Frame):
         """Resetta i campi e assicura lo stato normal ogni volta che si ritorna."""
         self.email_var.set("")
         self.pass_var.set("")
-        # nel dubbio rimetti in stato normal
         self.email_entry.configure(state="normal")
         self.pass_entry.configure(state="normal")
-        # focus sul campo email
         self.email_entry.focus_set()
 
 
@@ -161,18 +164,17 @@ class LoginFrame(ttk.Frame):
             messagebox.showerror("Login fallito", "Credenziali non valide.")
             return
         messagebox.showinfo("Benvenuto", f"Login riuscito come {acct['role'].capitalize()}.")
-        self.master_app.open_role_gui(acct["role"], acct["name"])
+        self.master_app.open_role_gui(acct["role"], email)
 
 # ---------------------------------------------------------------------------
 # STUDENTE -------------------------------------------------------------------
 class StudentFrame(BaseFrame):
     """Frame dello studente: credenziali e presentazioni."""
 
-    def __init__(self, master: "MainApp"):
+    def __init__(self, master: "MainApp", student: Student):
         super().__init__(master)
-        self.student = self.session.student
-
-        # sotto‑frame centrato in alto: non copre il pulsante Logout
+        self.student = student 
+        
         self.content = ttk.Frame(self)
         self.content.pack(anchor="n", pady=10, fill="x")
 
@@ -211,7 +213,7 @@ class StudentFrame(BaseFrame):
 
         # ---------------- messaggi
         self.msg_var = tk.StringVar()
-        ttk.Label(self.content, textvariable=self.msg_var, foreground="blue").pack(pady=4)
+        ttk.Label(self.content, textvariable=self.msg_var, foreground="green").pack(pady=4)
 
     # ------------------------------------------------------------------ col helper
     def _setup_tree_columns(self):
@@ -272,7 +274,6 @@ class StudentFrame(BaseFrame):
             )
 
     # ------------------------------------------------------------------ azione
-        # ------------------------------------------------------------------ azione
     def create_presentation(self):
         sel = self.cred_listbox.curselection()
         if not sel:
@@ -315,9 +316,6 @@ class StudentFrame(BaseFrame):
             messagebox.showerror("Errore", str(exc))
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # UNIVERSITÀ EMITTENTE -------------------------------------------------------
 class IssuingFrame(BaseFrame):
@@ -329,135 +327,136 @@ class IssuingFrame(BaseFrame):
 
         ttk.Label(
             self,
-            text=f"{self.issuer.id} – Università Emittente",
+            text=f"{self.issuer.id} - Università Emittente",
             font=("Helvetica", 14, "bold"),
         ).pack(pady=6)
 
         ttk.Button(
             self,
             text="Emetti credenziale a studente",
-            command=self._open_issue_dialog,          # <-- dialog di emissione
+            command=self._open_issue_dialog,
         ).pack(pady=4)
 
-        ttk.Label(self, text="Credenziali emesse (studente attivo):").pack()
-        self.cred_list = tk.Listbox(self, width=60, height=6)
-        self.cred_list.pack(pady=4)
+        ttk.Label(self, text="Tutte le credenziali emesse:").pack()
+
+        # ---------- nuova tabella
+        self.tree = ttk.Treeview(
+            self,
+            columns=("idx", "pseud", "cred"),
+            show="headings",
+            height=6,
+        )
+        self.tree.heading("idx",  text="ID")
+        self.tree.heading("pseud", text="Pseudonimo")
+        self.tree.heading("cred", text="Credenziale")
+
+        self.tree.column("idx",  width=50,  anchor="center", stretch=True)
+        self.tree.column("pseud", width=380, anchor="w",      stretch=True)
+        self.tree.column("cred", width=260, anchor="center", stretch=True)
+
+        self.tree.pack(pady=4, fill="x")
 
         ttk.Button(
             self,
             text="Revoca credenziale",
-            command=self._open_revoke_dialog,         # <-- NUOVO dialog di revoca
+            command=self._open_revoke_dialog,
         ).pack(pady=4)
 
     # ------------------------------------------------------------------ hook
     def on_show(self):
-        self._refresh_list()
+        self._refresh_table()
 
     # ------------------------------------------------------------------ util
-    def _refresh_list(self):
-        """Lista del solo studente attivo, colorando di rosso le revocate."""
-        self.cred_list.delete(0, tk.END)
+    def _refresh_table(self):
+        """Riempi la tabella con tutte le credenziali di tutti gli studenti."""
+        self.tree.delete(*self.tree.get_children())
         registry = self.session.revocation_registry
-        for cid in self.session.student.wallet.credentials:
-            revoked = registry.is_revoked(cid)
-            self.cred_list.insert(tk.END, cid)
-            idx = self.cred_list.size() - 1
-            if revoked:
-                self.cred_list.itemconfig(idx, fg="red")
+
+        for i, (stud) in enumerate(self.session.students.values(), start=1):
+            for cid in stud.wallet.credentials:
+                row_id = self.tree.insert("", tk.END, values=(i, stud.pseudonym, cid))
+                if registry.is_revoked(cid):
+                    self.tree.item(row_id, tags=("rev",))
+
+        # colora di rosso le revocate
+        self.tree.tag_configure("rev", foreground="red")
+
 
     # ------------------------------------------------------------------ dialog di emissione
     def _open_issue_dialog(self):
-        top = tk.Toplevel(self)
-        top.title("Emetti credenziale")
+        top = tk.Toplevel(self); top.title("Emetti credenziale")
 
-        ttk.Label(top, text="Seleziona lo studente:").pack(padx=10, pady=6)
+        ttk.Label(top, text="Seleziona lo pseudonimo:").pack(padx=10, pady=6)
 
-        student_lb = tk.Listbox(top, width=40, height=4)
+        student_lb = tk.Listbox(top, width=60, height=4)
         student_lb.pack(padx=10, pady=4)
 
-        students: List[Student] = getattr(self.session, "students", [self.session.student])
+        students = list(self.session.students.values())
         for s in students:
-            student_lb.insert(tk.END, s.name)
+            student_lb.insert(tk.END, s.pseudonym)
 
         def _issue():
             sel = student_lb.curselection()
             if not sel:
-                messagebox.showwarning("Attenzione", "Seleziona uno studente.")
-                return
+                messagebox.showwarning("Attenzione", "Seleziona uno studente."); return
             stud = students[sel[0]]
             self.issuer.issue_credential(stud.wallet, copy.deepcopy(COURSE_CATALOGUE))
-            messagebox.showinfo("Successo", f"Credenziale emessa a {stud.name}.")
+            messagebox.showinfo("Successo", f"Credenziale emessa a {stud.pseudonym}.")
             top.destroy()
-            if stud is self.session.student:
-                self._refresh_list()
+            self._refresh_table()        
 
         ttk.Button(top, text="Emetti", command=_issue).pack(pady=6)
         ttk.Button(top, text="Annulla", command=top.destroy).pack()
 
     # ------------------------------------------------------------------ dialog di revoca
     def _open_revoke_dialog(self):
-        top = tk.Toplevel(self)
-        top.title("Revoca credenziale")
+        top = tk.Toplevel(self); top.title("Revoca credenziale")
 
-        ttk.Label(top, text="Seleziona lo studente:").grid(row=0, column=0, padx=10, pady=(8, 4), sticky="w")
+        ttk.Label(top, text="Seleziona lo pseudonimo:").grid(row=0, column=0, padx=10, pady=(8, 4), sticky="w")
         ttk.Label(top, text="Seleziona la credenziale:").grid(row=0, column=1, padx=10, pady=(8, 4), sticky="w")
 
-        student_lb = tk.Listbox(top, width=25, height=8, exportselection=False)
+        student_lb = tk.Listbox(top, width=60, height=8, exportselection=False)
         cred_lb    = tk.Listbox(top, width=45, height=8, exportselection=False)
         student_lb.grid(row=1, column=0, padx=10, pady=4)
         cred_lb.grid(row=1, column=1, padx=10, pady=4)
 
-        students: List[Student] = getattr(self.session, "students", [self.session.student])
+        students = list(self.session.students.values())
         registry = self.session.revocation_registry
 
         for s in students:
-            student_lb.insert(tk.END, s.name)
+            student_lb.insert(tk.END, s.pseudonym)
 
-        def load_creds(index: int):
-            """Popola la lista credenziali per lo studente con indice `index`."""
+        def load_creds(idx):
             cred_lb.delete(0, tk.END)
-            stud = students[index]
-            for n, cid in enumerate(stud.wallet.credentials):
+            for n, cid in enumerate(students[idx].wallet.credentials):
                 cred_lb.insert(tk.END, cid)
                 if registry.is_revoked(cid):
                     cred_lb.itemconfig(n, fg="red")
 
-        # primo popolamento
         if students:
-            load_creds(0)
-            student_lb.selection_set(0)
+            student_lb.selection_set(0); load_creds(0)
 
-        # aggiorna quando cambia studente
-        def _on_student_select(_):
-            sel = student_lb.curselection()
-            if sel:
-                load_creds(sel[0])
-
-        student_lb.bind("<<ListboxSelect>>", _on_student_select)
+        student_lb.bind("<<ListboxSelect>>",
+                        lambda _: load_creds(student_lb.curselection()[0]))
 
         def _revoke():
             s_sel, c_sel = student_lb.curselection(), cred_lb.curselection()
             if not s_sel or not c_sel:
-                messagebox.showwarning("Attenzione", "Seleziona studente e credenziale.")
-                return
+                messagebox.showwarning("Attenzione", "Seleziona studente e credenziale."); return
 
-            stud = students[s_sel[0]]
-            cid  = cred_lb.get(c_sel[0])
+            stud = students[s_sel[0]]; cid = cred_lb.get(c_sel[0])
 
             if registry.is_revoked(cid):
-                messagebox.showinfo("Già revocata", "Questa credenziale è già revocata.")
-                return
+                messagebox.showinfo("Già revocata", "Questa credenziale è già revocata."); return
 
             self.issuer.revoke_credential(registry, cid)
-            messagebox.showinfo("Revoca", f"Credenziale {cid} revocata per {stud.name}.")
+            messagebox.showinfo("Revoca", f"Credenziale {cid} revocata per {stud.pseudonym}.")
             top.destroy()
-
-            # se lo studente attivo è quello revocato, aggiorna la lista principale
-            if stud is self.session.student:
-                self._refresh_list()
+            self._refresh_table()       
 
         ttk.Button(top, text="Revoca", command=_revoke).grid(row=2, column=0, columnspan=2, pady=8)
         ttk.Button(top, text="Annulla", command=top.destroy).grid(row=3, column=0, columnspan=2, pady=(0, 8))
+
 
 # ---------------------------------------------------------------------------
 # UNIVERSITÀ VERIFICATRICE ---------------------------------------------------
@@ -468,14 +467,13 @@ class VerifyingFrame(BaseFrame):
         super().__init__(master)
         self.verifier = self.session.verifying_uni
 
-        # sotto‑frame centrato
         self.content = ttk.Frame(self)
         self.content.pack(anchor="n", pady=10, fill="x")
 
         # ---------- titolo
         ttk.Label(
             self.content,
-            text=f"{self.verifier.id} – Università Verificatrice",
+            text=f"{self.verifier.id} - Università Verificatrice",
             font=("Helvetica", 14, "bold"),
         ).pack(pady=6)
 
@@ -488,15 +486,19 @@ class VerifyingFrame(BaseFrame):
         )
         self.tree.heading("pid",  text="ID")
         self.tree.heading("cred", text="Credenziale")
-        self.tree.heading("exam", text="Esame")
-
-        # larghezze base (credenziale larga)
+        self.tree.heading("exam", text="Esame") 
+         
         self.tree.column("pid",  width=60,  anchor="center", stretch=True)
-        self.tree.column("cred", width=240, anchor="center", stretch=True)  # UUID completo
+        self.tree.column("cred", width=240, anchor="center", stretch=True) 
         self.tree.column("exam", width=260, anchor="w",      stretch=True)
 
         self.tree.pack(pady=4, fill="x")
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
+        
+        # definizione tag colore
+        self.tree.tag_configure("ok",   foreground="green")
+        self.tree.tag_configure("fail", foreground="red")
+        
 
         # ---------- pulsante verifica
         ttk.Button(
@@ -507,11 +509,12 @@ class VerifyingFrame(BaseFrame):
 
         # ---------- risultato verifica
         self.result_var = tk.StringVar()
-        ttk.Label(
+        self.result_lbl = ttk.Label(         
             self.content,
             textvariable=self.result_var,
             foreground="green",
-        ).pack(pady=4)
+        )
+        self.result_lbl.pack(pady=4)
 
         self._current_index: int | None = None
 
@@ -525,7 +528,7 @@ class VerifyingFrame(BaseFrame):
     def _refresh_table(self):
         self.tree.delete(*self.tree.get_children())
         for idx, pres in enumerate(self.session.presentations):
-            full_cid   = pres.original_credential_public_part.credential_id  # <‑‑ intero
+            full_cid   = pres.original_credential_public_part.credential_id 
             course_name = pres.presented_course["nome"]
             self.tree.insert(
                 "", tk.END,
@@ -542,14 +545,22 @@ class VerifyingFrame(BaseFrame):
             messagebox.showwarning("Attenzione", "Seleziona una presentazione.")
             return
 
-        pres = self.session.presentations[self._current_index]
+        # iid della riga selezionata
+        row_id = self.tree.selection()[0]
+        pres   = self.session.presentations[self._current_index]
+
+        # rimuovi eventuali tag precedenti
+        self.tree.item(row_id, tags="")
+
         try:
-            self.verifier.verify_presentation(
-                pres, self.session.revocation_registry
-            )
+            self.verifier.verify_presentation(pres, self.session.revocation_registry)
             self.result_var.set("Presentazione VERIFICATA.")
+            self.result_lbl.configure(foreground="green") 
+            self.tree.item(row_id, tags=("ok",))      # verde
         except ProjectBaseException as exc:
             self.result_var.set(f"Fallita: {exc}")
+            self.result_lbl.configure(foreground="red") 
+            self.tree.item(row_id, tags=("fail",))    # rosso
 
 
 
@@ -559,8 +570,8 @@ class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("Credential Ecosystem GUI")
-        self.minsize(840, 620)
+        self.title("Project Work APS - Gruppo 11 - IZ")
+        self.minsize(620, 620)
 
         # Stato condiviso
         self.session = SessionManager()
@@ -576,7 +587,7 @@ class MainApp(tk.Tk):
         self.role_map = {
             "student": StudentFrame,
             "issuer": IssuingFrame,
-            "verifier": VerifyingFrame,  # <‑‑ usa la nuova classe
+            "verifier": VerifyingFrame, 
         }
 
         # Schermata di login iniziale
@@ -599,15 +610,24 @@ class MainApp(tk.Tk):
             frame.on_show()
 
     # ------------------------------------------------------------------
-    def open_role_gui(self, role: str, _name: str):
+    def open_role_gui(self, role: str, email: str):
         """Passa al frame specifico dopo il login."""
-        frame_cls = self.role_map.get(role)
-        if not frame_cls:
-            messagebox.showerror("Errore", f"Ruolo sconosciuto: {role}")
+        if role == "student":
+            # ricava l'istanza dallo user appena loggato
+            stud = self.session.students.get(email)
+            if not stud:
+                messagebox.showerror("Errore", "Studente non trovato."); return
+
+            self.session.active_student = stud          # <‑‑ memorizza
+            frame = StudentFrame(self, stud)            # passa l’istanza
+            self.frames[StudentFrame] = frame
+            frame.grid(row=0, column=0, sticky="nsew")
+            self.show_frame(StudentFrame)
             return
-        self.show_frame(frame_cls)
 
-
+        # issuer / verifier
+        self.show_frame(self.role_map[role])
+   
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":

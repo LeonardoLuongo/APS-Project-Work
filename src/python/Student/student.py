@@ -6,4 +6,6 @@ class Student:
         """Inizializza uno Studente con un nome e un wallet personale."""
         self.name = name
         self.wallet = StudentWallet(self.name)
-        print(f"Studente '{self.name}' creato con il proprio wallet.")
+        self.pseudonym = self.wallet.pseudonym
+
+        print(f"Studente '{self.name}' creato con wallet; pseudonym={self.pseudonym[:10]}…")
