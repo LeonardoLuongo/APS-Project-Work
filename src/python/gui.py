@@ -1,11 +1,12 @@
 """
 GUI applicativo per il Project Work 
 
-• Tkinter/Ttk con tre ruoli: Studente, Università Emittente, Università Verificatrice
-• Tutti gli oggetti di dominio sono singleton in SessionManager (rimangono
+Tkinter/Ttk con tre ruoli: Studente, Università Emittente, Università Verificatrice
+
+Tutti gli oggetti di dominio sono singleton in SessionManager (rimangono
   vivi mentre si cambia frame/utente nella stessa sessione)
-• Layout: un unico container nel root gestito con `grid`; dentro ogni frame
-  si usano solo `pack` *oppure* `grid` per evitare conflitti.
+
+Layout: un unico container nel root gestito con `grid`
 
 """
 from __future__ import annotations
