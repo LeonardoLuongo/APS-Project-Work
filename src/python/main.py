@@ -136,10 +136,10 @@ def run_simulation():
     print("\nUn hacker presenta una credenziale completamente forgiata...")
     try:
         uni_salerno.verify_presentation(presentazione_forgiata, revocation_registry)
-        print("\nRISULTATO SCENARIO FORGERY: SUCCESSO. La firma falsa è stata rilevata al CHECK 2!")
+        print("\nRISULTATO SCENARIO FORGERY: FALLITO. La frode non è stata rilevata!")
     except SignatureVerificationError as e:
         print(f"\nVERIFICA FALLITA (correttamente): {e}")
-        print("\nRISULTATO SCENARIO FORGERY: FALLITO. La frode non è stata rilevata!")
+        print("\nRISULTATO SCENARIO FORGERY: SUCCESSO. La firma falsa è stata rilevata al CHECK 2!")
 
     ##########################################################################################################################
     print("\n--- Simulazione di una Università Emittente Malevola (Fiducia Revocata) ---")
