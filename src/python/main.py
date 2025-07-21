@@ -41,8 +41,8 @@ def run_simulation():
 
     corsi_superati = [
         {"id": 1, "nome": "Algoritmi e Protocolli per la Sicurezza", "voto": 30, "cfu": 9, "data": "2024-06-18"},
-        {"id": 2, "nome": "Sistemi Distribuiti", "voto": 28, "cfu": 6, "data": "2024-05-20"},
-        {"id": 3, "nome": "Letteratura Francese", "voto": 25, "cfu": 6, "data": "2024-06-10"}
+        {"id": 2, "nome": "Sistemi Distribuiti", "voto": 28, "cfu": 6, "data": "2024-05-20"}, 
+        {"id": 3, "nome": "Letteratura Francese", "voto": 25, "cfu": 6, "data": "2024-06-10"} 
     ]
     uni_rennes.issue_credential(studente_francesco.wallet, corsi_superati)
     cred_id = list(studente_francesco.wallet.credentials.keys())[0]
